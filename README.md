@@ -11,11 +11,13 @@ an in-page panel to LinkedIn's invitations pages so you can bulk **accept** or
 
 - **Accept all** / **Ignore all** pending received invitations.
 - **Accept verified only** — switches to LinkedIn's "Verified" tab, then accepts.
-- **Limit** — cap how many requests to process per run (great for testing).
+- **Limit** — cap how many requests to process per run. Defaults to `100`;
   `0` (or empty) means no limit.
 - **Stop** button to halt mid-run.
 - Human-like randomized delays (0.3-0.8s) between actions to stay gentle on
   LinkedIn's anti-automation systems.
+- On `/mynetwork/grow/`, bulk actions hand off to the received invitations page
+  before running to avoid LinkedIn's grow-page scroll jitter.
 
 ## Install (development)
 

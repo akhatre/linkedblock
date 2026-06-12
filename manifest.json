@@ -7,7 +7,6 @@
     {
       "matches": ["https://www.linkedin.com/*"],
       "js": ["src/selectors.js", "src/content.js"],
-      "css": ["src/panel.css"],
       "run_at": "document_idle"
     }
   ]
