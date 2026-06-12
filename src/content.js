@@ -8,6 +8,7 @@
   var VERIFIED_FRAGMENT = 'FROM_VERIFIED_MEMBER';
   var GROW_PATH = '/mynetwork/grow';
   var RECEIVED_PATH = '/mynetwork/invitation-manager/received';
+  var MESSAGING_PATH = '/messaging';
   var RECEIVED_URL =
     'https://www.linkedin.com/mynetwork/invitation-manager/received/';
   var VERIFIED_URL =
@@ -40,6 +41,16 @@
       '  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;',
       '  font-size: 13px;',
       '  line-height: 1.3;',
+      '}',
+      '#lf-panel.lf-panel--floating {',
+      '  position: fixed;',
+      '  top: 76px;',
+      '  right: 24px;',
+      '  z-index: 2147483647;',
+      '  width: 360px;',
+      '  max-width: calc(100vw - 32px);',
+      '  margin: 0;',
+      '  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);',
       '}',
       '#lf-panel .lf-header {',
       '  display: flex;',
@@ -96,6 +107,7 @@
       '  flex-wrap: nowrap;',
       '  margin-bottom: 0;',
       '}',
+      '#lf-panel .lf-hidden { display: none !important; }',
       '#lf-panel .lf-status {',
       '  flex: 0 1 auto;',
       '  margin-left: auto;',
@@ -104,6 +116,16 @@
       '  min-height: 16px;',
       '  max-width: 70%;',
       '  text-align: right;',
+      '}',
+      '@media (max-width: 600px) {',
+      '  #lf-panel.lf-panel--floating {',
+      '    top: 64px;',
+      '    right: 8px;',
+      '    left: 8px;',
+      '    width: auto;',
+      '    max-width: none;',
+      '  }',
+      '  #lf-panel.lf-panel--floating .lf-actions { flex-wrap: wrap; }',
       '}',
       'body[data-color-scheme="dark"] #lf-panel {',
       '  background: #1b1f23;',
@@ -140,9 +162,10 @@
     '  <span class="lf-hint">0 = all</span>',
     '</div>',
     '<div class="lf-row lf-actions">',
-    '  <button id="lf-accept" class="lf-btn lf-accept">Accept all</button>',
-    '  <button id="lf-ignore" class="lf-btn lf-ignore">Ignore all</button>',
-    '  <button id="lf-verified" class="lf-btn">Accept verified only</button>',
+    '  <button id="lf-accept" class="lf-btn lf-accept lf-invitation-action">Accept all</button>',
+    '  <button id="lf-ignore" class="lf-btn lf-ignore lf-invitation-action">Ignore all</button>',
+    '  <button id="lf-verified" class="lf-btn lf-invitation-action">Accept verified only</button>',
+    '  <button id="lf-mark-read" class="lf-btn lf-accept lf-message-action lf-hidden">Mark messages read</button>',
     '  <button id="lf-stop" class="lf-btn lf-stop" disabled>Stop</button>',
     '</div>'
   ].join('');
@@ -157,7 +180,7 @@
     return path.replace(/\/+$/, '');
   }
 
-  function isTargetPage() {
+  function isInvitationPage() {
     var path = cleanPath(location.pathname);
 
     return path === GROW_PATH ||
@@ -165,12 +188,43 @@
       path === RECEIVED_PATH + '/' + VERIFIED_FRAGMENT;
   }
 
+  function isMessagingPage() {
+    var path = cleanPath(location.pathname);
+    return path === MESSAGING_PATH || path.indexOf(MESSAGING_PATH + '/') === 0;
+  }
+
+  function isTargetPage() {
+    return isInvitationPage() || isMessagingPage();
+  }
+
   function isGrowPage() {
     return cleanPath(location.pathname) === GROW_PATH;
   }
 
+  function getPanelAnchor() {
+    if (isMessagingPage() && LF.getMessagingPanelAnchor) {
+      return LF.getMessagingPanelAnchor();
+    }
+
+    return LF.getPanelAnchor ? LF.getPanelAnchor() : LF.getContainer();
+  }
+
+  function toggleControls(selector, hidden) {
+    var controls = panel.querySelectorAll(selector);
+    for (var i = 0; i < controls.length; i++) {
+      controls[i].classList.toggle('lf-hidden', hidden);
+    }
+  }
+
+  function syncPanelMode() {
+    var messaging = isMessagingPage();
+    toggleControls('.lf-invitation-action', messaging);
+    toggleControls('.lf-message-action', !messaging);
+  }
+
   function unmountPanel() {
     if (panel.parentNode) panel.parentNode.removeChild(panel);
+    panel.classList.remove('lf-panel--floating');
     if (state.running) state.stop = true;
   }
 
@@ -185,7 +239,16 @@
       return;
     }
 
-    var anchor = LF.getPanelAnchor ? LF.getPanelAnchor() : LF.getContainer();
+    syncPanelMode();
+    if (isMessagingPage()) {
+      panel.classList.add('lf-panel--floating');
+      if (panel.parentNode !== document.body) document.body.appendChild(panel);
+      mountRetriesLeft = 0;
+      return;
+    }
+
+    panel.classList.remove('lf-panel--floating');
+    var anchor = getPanelAnchor();
     if (!anchor || !anchor.parentNode || anchor === panel || panel.contains(anchor)) {
       unmountPanel();
       return;
@@ -224,6 +287,7 @@
     $('#lf-accept').disabled = on;
     $('#lf-ignore').disabled = on;
     $('#lf-verified').disabled = on;
+    $('#lf-mark-read').disabled = on;
     $('#lf-stop').disabled = !on;
   }
 
@@ -238,10 +302,85 @@
   // Human-like pause between actions so we don't look like a bot.
   function randomDelay() { return delay(300 + Math.floor(Math.random() * 500)); }
 
+  function randomMessageDelay() {
+    return delay(900 + Math.floor(Math.random() * 700));
+  }
+
   function scrollToLoadMore(container) {
     var cards = LF.getCards(container);
     if (cards.length) cards[cards.length - 1].scrollIntoView({ block: 'end' });
     window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  function getScrollableParent(el) {
+    var node = el;
+    while (node && node !== document.body) {
+      var overflowY = window.getComputedStyle(node).overflowY;
+      if (node.scrollHeight > node.clientHeight && /auto|scroll|overlay/.test(overflowY)) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function scrollMessagesToLoadMore(container) {
+    var threads = LF.getMessageThreads ? LF.getMessageThreads(container) : [];
+    var lastThread = threads[threads.length - 1];
+    if (lastThread) lastThread.scrollIntoView({ block: 'end' });
+
+    var scroller = getScrollableParent(lastThread || container);
+    if (scroller === document.scrollingElement || scroller === document.documentElement) {
+      window.scrollBy(0, window.innerHeight);
+      return;
+    }
+
+    scroller.scrollTop += scroller.clientHeight || 400;
+  }
+
+  function dispatchActivationEvent(target, type) {
+    target.dispatchEvent(new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+  }
+
+  function dispatchEnterEvent(target, type) {
+    target.dispatchEvent(new KeyboardEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13
+    }));
+  }
+
+  function activateMessageThread(thread) {
+    var target = LF.findMessageOpenTarget ? LF.findMessageOpenTarget(thread) : null;
+    if (!target) return false;
+
+    target.scrollIntoView({ block: 'center' });
+    if (target.focus) {
+      try {
+        target.focus({ preventScroll: true });
+      } catch (e) {
+        target.focus();
+      }
+    }
+
+    dispatchActivationEvent(target, 'mousedown');
+    dispatchActivationEvent(target, 'mouseup');
+    if (target.click) {
+      target.click();
+    } else {
+      dispatchActivationEvent(target, 'click');
+    }
+    dispatchEnterEvent(target, 'keydown');
+    dispatchEnterEvent(target, 'keyup');
+    return true;
   }
 
   function queueActionOnReceivedPage(action) {
@@ -348,6 +487,74 @@
     );
   }
 
+  async function markMessagesRead() {
+    var limit = getLimit();
+    var seen = {};
+    var stagnant = 0;
+    var lastVisibleKey = '';
+    var failed = false;
+
+    state.processed = 0;
+    state.stop = false;
+    setRunning(true);
+    setStatus('Working...');
+
+    while (!state.stop && (limit === 0 || state.processed < limit)) {
+      var container = LF.getMessageContainer ? LF.getMessageContainer() : null;
+      if (!container) {
+        failed = true;
+        setStatus('Message list not found - open LinkedIn Messaging first.');
+        break;
+      }
+
+      var threads = LF.getMessageThreads(container);
+      var unread = threads.filter(function (thread) {
+        var key = LF.messageThreadKey(thread);
+        return key && !seen[key] && LF.isUnreadMessageThread(thread);
+      });
+
+      if (unread.length === 0) {
+        var visibleKey = threads.length
+          ? LF.messageThreadKey(threads[threads.length - 1])
+          : '';
+        stagnant = visibleKey === lastVisibleKey ? stagnant + 1 : 0;
+        lastVisibleKey = visibleKey;
+
+        if (stagnant >= 6) break;
+        scrollMessagesToLoadMore(container);
+        await delay(1200);
+        continue;
+      }
+      stagnant = 0;
+      lastVisibleKey = '';
+
+      for (var i = 0; i < unread.length; i++) {
+        if (state.stop) break;
+        if (limit !== 0 && state.processed >= limit) break;
+
+        var thread = unread[i];
+        var key = LF.messageThreadKey(thread);
+        if (!key || seen[key]) continue;
+
+        if (!activateMessageThread(thread)) continue;
+
+        seen[key] = true;
+        state.processed++;
+        setStatus('Marked read ' + state.processed + '...');
+        await randomMessageDelay();
+      }
+    }
+
+    setRunning(false);
+    if (failed) return;
+
+    setStatus(
+      state.stop
+        ? 'Stopped at ' + state.processed + '.'
+        : 'Done. Marked read ' + state.processed + '.'
+    );
+  }
+
   // --------------------------------------------------------------- wiring ----
   $('#lf-accept').addEventListener('click', function () {
     if (!state.running) processAll('accept');
@@ -365,6 +572,9 @@
       return;
     }
     processAll('accept');
+  });
+  $('#lf-mark-read').addEventListener('click', function () {
+    if (!state.running) markMessagesRead();
   });
   $('#lf-stop').addEventListener('click', function () {
     state.stop = true;

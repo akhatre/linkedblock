@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LinkFilter — LinkedIn bulk invitations",
-  "version": "0.1.0",
-  "description": "Bulk accept/ignore LinkedIn connection requests with human-like throttling and a test limit.",
+  "name": "LinkFilter — LinkedIn bulk cleanup",
+  "version": "0.2.0",
+  "description": "Bulk accept/ignore LinkedIn connection requests and mark messages as read with human-like throttling and a test limit.",
   "content_scripts": [
     {
       "matches": ["https://www.linkedin.com/*"],
