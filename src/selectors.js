@@ -2,8 +2,8 @@
 //
 // LinkedIn's CSS classes are hashed and change on every deploy, so we only
 // anchor on stable, semantic attributes (data-testid, role, componentkey,
-// aria-label). If LinkedIn changes their markup, this is the only file you
-// should need to touch.
+// aria-label) and module headings as a fallback. If LinkedIn changes their
+// markup, this is the only file you should need to touch.
 var LF = window.__LinkFilter || (window.__LinkFilter = {});
 
 LF.SELECTORS = {
@@ -11,13 +11,26 @@ LF.SELECTORS = {
   container: '[data-testid="lazy-column"]',
   // Each received-invitation card.
   card: '[role="listitem"][componentkey^="urn:li:invitation:"]',
+  // LinkedIn module headings are semantic even when classes are hashed.
+  heading: 'h1, h2, h3, h4, [role="heading"]',
   // The bottom spinner shown while more cards are loading on scroll.
   loader: '[data-testid="loader"]'
 };
 
 // The list container, or null if we're not on the right page yet.
 LF.getContainer = function () {
-  return document.querySelector(LF.SELECTORS.container);
+  var containers = document.querySelectorAll(LF.SELECTORS.container);
+
+  for (var i = 0; i < containers.length; i++) {
+    if (LF.getCards(containers[i]).length) return containers[i];
+  }
+
+  if (containers.length === 1) return containers[0];
+
+  var card = LF.getCards(document)[0];
+  if (!card) return null;
+
+  return card.closest('[role="list"], ul, ol') || card.parentElement;
 };
 
 // All invitation cards currently rendered in the DOM.
@@ -25,6 +38,26 @@ LF.getCards = function (root) {
   return Array.prototype.slice.call(
     (root || document).querySelectorAll(LF.SELECTORS.card)
   );
+};
+
+// The block the control panel should sit above.
+LF.getPanelAnchor = function () {
+  var card = LF.getCards(document)[0];
+  if (card) {
+    var section = card.closest('section');
+    return section || card.closest('[role="list"], ul, ol') || card.parentElement;
+  }
+
+  var headings = document.querySelectorAll(LF.SELECTORS.heading);
+
+  for (var i = 0; i < headings.length; i++) {
+    if (/^\s*invitations\b/i.test(headings[i].textContent || '')) {
+      var headingSection = headings[i].closest('section');
+      if (headingSection) return headingSection;
+    }
+  }
+
+  return LF.getContainer();
 };
 
 // Find the Accept or Ignore button inside a single card.

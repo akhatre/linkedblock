@@ -1,43 +1,55 @@
 #lf-panel {
-  position: fixed;
-  top: 80px;
-  right: 16px;
-  z-index: 99999;
-  width: 220px;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 12px;
   padding: 12px;
   box-sizing: border-box;
   background: #fff;
   color: #1d2226;
   border: 1px solid #d0d5da;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
   font-size: 13px;
   line-height: 1.3;
 }
 
+#lf-panel .lf-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
 #lf-panel .lf-title {
   font-weight: 700;
   font-size: 14px;
-  margin-bottom: 10px;
 }
 
 #lf-panel .lf-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
 
 #lf-panel .lf-btn {
-  flex: 1;
-  padding: 6px 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
   border-radius: 16px;
   border: 1px solid #0a66c2;
   background: #fff;
   color: #0a66c2;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 #lf-panel .lf-btn:hover:not(:disabled) { background: #eaf3fb; }
@@ -63,11 +75,19 @@
 
 #lf-panel .lf-hint { font-size: 11px; color: #8a949c; }
 
+#lf-panel .lf-actions {
+  flex-wrap: nowrap;
+  margin-bottom: 0;
+}
+
 #lf-panel .lf-status {
-  margin-top: 4px;
+  flex: 0 1 auto;
+  margin-left: auto;
   font-size: 12px;
   color: #56687a;
   min-height: 16px;
+  max-width: 70%;
+  text-align: right;
 }
 
 /* LinkedIn dark mode */

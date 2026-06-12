@@ -1,7 +1,7 @@
 # LinkFilter
 
 A small Chrome (Manifest V3) extension that makes LinkedIn less tedious. It adds
-a floating panel to the **Invitation Manager** page so you can bulk **accept** or
+an in-page panel to LinkedIn's invitations pages so you can bulk **accept** or
 **ignore** connection requests instead of clicking them one at a time.
 
 > Phase 1 (this version): connection requests.
@@ -14,7 +14,7 @@ a floating panel to the **Invitation Manager** page so you can bulk **accept** o
 - **Limit** — cap how many requests to process per run (great for testing).
   `0` (or empty) means no limit.
 - **Stop** button to halt mid-run.
-- Human-like randomized delays (0.8–2s) between actions to stay gentle on
+- Human-like randomized delays (0.3-0.8s) between actions to stay gentle on
   LinkedIn's anti-automation systems.
 
 ## Install (development)
@@ -23,8 +23,9 @@ a floating panel to the **Invitation Manager** page so you can bulk **accept** o
 2. Go to `chrome://extensions`.
 3. Enable **Developer mode** (top-right).
 4. **Load unpacked** → select this folder.
-5. Open <https://www.linkedin.com/mynetwork/invitation-manager/received/>.
-   The **LinkFilter** panel appears top-right.
+5. Open <https://www.linkedin.com/mynetwork/grow/> or
+   <https://www.linkedin.com/mynetwork/invitation-manager/received/>.
+   The **LinkFilter** panel appears above the invitations block.
 
 `make build` prints the same instructions; `make pack` produces `linkfilter.zip`
 for drag-and-drop install.
