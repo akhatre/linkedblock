@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "LinkFilter — LinkedIn bulk invitations",
+  "version": "0.1.0",
+  "description": "Bulk accept/ignore LinkedIn connection requests with human-like throttling and a test limit.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/mynetwork/invitation-manager/*"],
+      "js": ["src/selectors.js", "src/content.js"],
+      "css": ["src/panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

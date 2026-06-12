@@ -1,0 +1,86 @@
+#lf-panel {
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  z-index: 99999;
+  width: 220px;
+  padding: 12px;
+  box-sizing: border-box;
+  background: #fff;
+  color: #1d2226;
+  border: 1px solid #d0d5da;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+#lf-panel .lf-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+#lf-panel .lf-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#lf-panel .lf-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 16px;
+  border: 1px solid #0a66c2;
+  background: #fff;
+  color: #0a66c2;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+#lf-panel .lf-btn:hover:not(:disabled) { background: #eaf3fb; }
+#lf-panel .lf-btn:disabled { opacity: 0.5; cursor: default; }
+
+#lf-panel .lf-accept { background: #0a66c2; color: #fff; }
+#lf-panel .lf-accept:hover:not(:disabled) { background: #004182; }
+
+#lf-panel .lf-ignore { border-color: #b24020; color: #b24020; }
+#lf-panel .lf-ignore:hover:not(:disabled) { background: #fbece8; }
+
+#lf-panel .lf-stop { border-color: #666; color: #666; }
+#lf-panel .lf-stop:hover:not(:disabled) { background: #f0f0f0; }
+
+#lf-panel .lf-limit { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+#lf-panel .lf-limit input {
+  width: 52px;
+  padding: 4px;
+  border: 1px solid #d0d5da;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+#lf-panel .lf-hint { font-size: 11px; color: #8a949c; }
+
+#lf-panel .lf-status {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #56687a;
+  min-height: 16px;
+}
+
+/* LinkedIn dark mode */
+body[data-color-scheme="dark"] #lf-panel {
+  background: #1b1f23;
+  color: #e9e5df;
+  border-color: #38434f;
+}
+body[data-color-scheme="dark"] #lf-panel .lf-btn { background: #1b1f23; }
+body[data-color-scheme="dark"] #lf-panel .lf-accept { background: #0a66c2; color: #fff; }
+body[data-color-scheme="dark"] #lf-panel .lf-status { color: #a9b0b7; }
+body[data-color-scheme="dark"] #lf-panel .lf-limit input {
+  background: #38434f;
+  color: #e9e5df;
+  border-color: #56687a;
+}
