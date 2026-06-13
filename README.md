@@ -6,13 +6,30 @@ an in-page panel to LinkedIn's invitations and messaging pages so you can bulk
 
 > Phase 1: connection requests.
 > Phase 2: mark all messages as read.
+> Phase 3: filter and target the messaging inbox.
 
 ## Features
 
 - **Accept all** / **Ignore all** pending received invitations.
 - **Accept verified only** — switches to LinkedIn's "Verified" tab, then accepts.
 - **Mark messages read** — opens each unread conversation so LinkedIn marks it
-  as read.
+  as read. Restricted to the categories you **target** (see below).
+- **Target** (messaging) — checkboxes choosing which conversations Mark-read
+  acts on: Sponsored, InMail, Out of network, From connections. Defaults to
+  everything **except** your own connections.
+- **Filter** (messaging) — a master toggle (on by default) that visually hides
+  unwanted conversations from the inbox. Reversible — toggle off to show them
+  again. Sub-options:
+  - **Hide sponsored** / **Hide InMail** — cheap, list-row only.
+  - **Hide 3+ one-sided** — hides spammy senders who messaged you 3+ times with
+    no reply from you. Detecting this opens the conversation to read its history
+    (which LinkedIn marks as read); LinkFilter records the verdict in a local
+    cache so it's only done once per conversation, and **restores unread state**
+    on false positives. Connections are never opened.
+- **Persistence** — your checkbox settings and the per-conversation analysis
+  cache are stored in `chrome.storage.local`, keyed by a stable participant
+  signature so they survive reloads and LinkedIn's hashed-class deploys. A
+  conversation is re-analyzed only when it gains a new message.
 - **Limit** — cap how many requests to process per run. Defaults to `100`;
   `0` (or empty) means no limit.
 - **Stop** button to halt mid-run.
@@ -64,6 +81,12 @@ the whole backlog.
   conversation-list rows. Unread state is detected from semantic unread-count,
   notification-badge, and bold title/time markers. Opening an unread
   conversation marks it read in LinkedIn.
+- Category is read from the list row: the *Sponsored*/*InMail* snippet pills,
+  and a presence indicator (shown only for your connections) to tell in-network
+  from out-of-network.
+- Filtration runs continuously while you're on `/messaging/`: it re-applies as
+  you scroll and as rows lazy-load (via a `MutationObserver`), and after hiding
+  rows it pulls in more to keep the inbox full.
 
 ## A note on account safety
 
@@ -71,3 +94,9 @@ Bulk-automating actions can trip LinkedIn's automated-activity detection and
 technically pushes against their User Agreement. Mitigations baked in: randomized
 human-like delays, a per-run limit, and a Stop control. Use modest batches and
 keep the tab in the foreground.
+
+The **Hide 3+ one-sided** filter is the heaviest: on its first run it opens each
+uncached out-of-network conversation (throttled, human-like) to read its
+history, so the initial pass on a large inbox is slow and will flip through
+conversations on screen. Subsequent loads are fast because verdicts are cached.
+Hit **Stop** any time to halt the scan.

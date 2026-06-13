@@ -122,9 +122,28 @@ LF.getMessageThreads = function (root) {
   return threads;
 };
 
-// The messaging conversation list, or null if it has not rendered yet.
+// Every conversation row in the DOM, including ones LinkFilter has hidden
+// (display:none). `getMessageThreads` skips invisible rows, so filtration uses
+// this variant — otherwise a hidden row could never be un-hidden again.
+LF.getMessageThreadRows = function (root) {
+  var nodes = (root || document).querySelectorAll(LF.SELECTORS.messageThread);
+  var rows = [];
+  var seen = [];
+
+  for (var i = 0; i < nodes.length; i++) {
+    var li = nodes[i].matches('li') ? nodes[i] : (nodes[i].closest('li') || nodes[i]);
+    if (seen.indexOf(li) !== -1) continue;
+    seen.push(li);
+    rows.push(li);
+  }
+
+  return rows;
+};
+
+// The messaging conversation list, or null if it has not rendered yet. Uses
+// the all-rows query so it still resolves when filtration has hidden rows.
 LF.getMessageContainer = function () {
-  var threads = LF.getMessageThreads(document);
+  var threads = LF.getMessageThreadRows(document);
   if (!threads.length) return null;
 
   var candidates = document.querySelectorAll(LF.SELECTORS.messageList);
@@ -143,6 +162,15 @@ LF.getMessageContainer = function () {
   }
 
   return best || threads[0].closest('[role="list"], ul, ol') || threads[0].parentElement;
+};
+
+// The top bar that holds LinkedIn's own search/filter controls. LinkFilter's
+// messaging panel mounts immediately below it, at the top of the inbox column.
+LF.getMessagingTopAnchor = function () {
+  return document.querySelector(
+    '.msg-cross-pillar-inbox-top-bar-wrapper__container, ' +
+    '[data-test-msg-cross-pillar-inbox-top-bar-wrapper]'
+  );
 };
 
 // The block the control panel should sit above on LinkedIn Messaging.
@@ -217,13 +245,170 @@ LF.isUnreadMessageThread = function (thread) {
   return false;
 };
 
-LF.isSponsoredMessageThread = function (thread) {
-  var pills = thread ? thread.querySelectorAll('.msg-conversation-card__pill') : [];
+// Pill text shown inside a conversation row's snippet ("Sponsored", "InMail").
+LF.messageThreadPill = function (thread) {
+  if (!thread) return '';
+  var pills = thread.querySelectorAll('.msg-conversation-card__pill, [class*="msg-conversation-card__pill"]');
   for (var i = 0; i < pills.length; i++) {
-    if (/^\s*sponsored\s*$/i.test(pills[i].textContent || '')) return true;
+    var text = (pills[i].textContent || '').replace(/\s+/g, ' ').trim();
+    if (text) return text;
   }
 
-  return !!(thread && /\bsponsored\b/i.test(thread.textContent || ''));
+  return '';
+};
+
+LF.isSponsoredMessageThread = function (thread) {
+  if (!thread) return false;
+  if (/^\s*sponsored\s*$/i.test(LF.messageThreadPill(thread))) return true;
+  // Sponsored rows hang a hoverable trigger off the avatar even when the pill
+  // text is localized or missing.
+  if (thread.querySelector('[data-js-sponsored-conversation-hoverable-trigger]')) return true;
+
+  return false;
+};
+
+LF.isInMailMessageThread = function (thread) {
+  return /^\s*inmail\s*$/i.test(LF.messageThreadPill(thread));
+};
+
+// 1st-degree connections render a presence indicator (online/offline dot) that
+// LinkedIn only shows for your network; out-of-network rows use a plain
+// facepile with no presence entity. That wrapper — not the online state — is
+// the in-network signal.
+LF.isConnectionMessageThread = function (thread) {
+  return !!(thread && thread.querySelector('.presence-entity, [class*="presence-entity"]'));
+};
+
+// Coarse category for targeting/filtration, computed from the list row alone
+// (no need to open the conversation):
+//   'sponsored' | 'inmail' | 'connection' | 'out-of-network'
+LF.getThreadCategory = function (thread) {
+  if (LF.isSponsoredMessageThread(thread)) return 'sponsored';
+  if (LF.isInMailMessageThread(thread)) return 'inmail';
+  if (LF.isConnectionMessageThread(thread)) return 'connection';
+  return 'out-of-network';
+};
+
+// Stable, reload-surviving key for a conversation row. List rows only carry
+// regenerated ember ids, so we anchor on the participant signature from the
+// select-conversation label. Falls back to the overflow button's a11y text
+// (also participant-based) and finally to participant names + snippet.
+LF.conversationKey = function (thread) {
+  if (!thread) return '';
+
+  var selectLabel = thread.querySelector('[aria-label^="Select conversation with" i]');
+  if (selectLabel) {
+    var sel = (selectLabel.getAttribute('aria-label') || '')
+      .replace(/^select conversation with\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (sel) return 'names:' + sel.toLowerCase();
+  }
+
+  var overflow = thread.querySelector('.msg-thread-actions__control .visually-hidden, .msg-thread-actions__control + * .visually-hidden');
+  var overflowText = overflow ? (overflow.textContent || '') : '';
+  var m = /your conversation with\s+(.+)$/i.exec(overflowText.replace(/\s+/g, ' ').trim());
+  if (m && m[1]) return 'names:' + m[1].toLowerCase();
+
+  var participant = thread.querySelector(
+    '.msg-conversation-listitem__participant-names, [class*="participant-names"]'
+  );
+  var name = participant ? (participant.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  if (name) return 'names:' + name.toLowerCase();
+
+  return LF.messageThreadKey(thread);
+};
+
+// Latest-message snippet text (used for cache invalidation and the "You:"
+// shortcut that tells us the user replied last).
+LF.messageSnippet = function (thread) {
+  if (!thread) return '';
+  var snippet = thread.querySelector(
+    '.msg-conversation-card__message-snippet, [class*="message-snippet"]'
+  );
+  return snippet ? (snippet.textContent || '').replace(/\s+/g, ' ').trim() : '';
+};
+
+// Row timestamp text (e.g. "May 20", "1:57 AM"). Combined with the snippet it
+// is enough to detect that a cached conversation gained new messages.
+LF.messageTimestamp = function (thread) {
+  if (!thread) return '';
+  var time = thread.querySelector('time');
+  return time ? (time.textContent || '').replace(/\s+/g, ' ').trim() : '';
+};
+
+// True when the latest message in the row was sent by the user. LinkedIn
+// prefixes the snippet with "You:" in that case.
+LF.userRepliedLast = function (thread) {
+  return /^you:\s*/i.test(LF.messageSnippet(thread));
+};
+
+// --- Open-conversation (reading pane) readers ------------------------------
+
+// The currently open conversation's message events. Each event is one message;
+// the other party's carry the "--other" modifier, the user's do not. The base
+// class `.msg-s-event-listitem` matches only the message items, never their
+// BEM children (`msg-s-event-listitem__body`, `…__link`, …).
+LF.getOpenThreadEvents = function () {
+  var list = document.querySelector('.msg-s-message-list-content');
+  var root = list || document;
+  return Array.prototype.slice.call(root.querySelectorAll('.msg-s-event-listitem'));
+};
+
+// Count incoming vs. user messages in the open conversation.
+//   { otherCount, userReplied }
+LF.countThreadSides = function () {
+  var events = LF.getOpenThreadEvents();
+  var otherCount = 0;
+  var userReplied = false;
+
+  for (var i = 0; i < events.length; i++) {
+    var cls = events[i].getAttribute('class') || '';
+    if (/msg-s-event-listitem--other\b/.test(cls)) {
+      otherCount++;
+    } else {
+      userReplied = true;
+    }
+  }
+
+  return { otherCount: otherCount, userReplied: userReplied };
+};
+
+// The other participant's profile URN for the open conversation, e.g.
+// "ACoAAAM7ikkB...". Stable across reloads; stored as a secondary cache id.
+LF.getOpenThreadProfileUrn = function () {
+  var link = document.querySelector('.msg-thread__link-to-profile, [class*="msg-thread__link-to-profile"]');
+  var href = link ? link.getAttribute('href') || '' : '';
+  var m = /\/in\/([^/?#]+)/.exec(href);
+  return m ? m[1] : '';
+};
+
+// --- Per-row overflow actions ----------------------------------------------
+
+// The "…" overflow trigger on a conversation list row (inbox shortcuts).
+LF.getRowOverflowButton = function (thread) {
+  if (!thread) return null;
+  return thread.querySelector(
+    '.msg-conversation-card__inbox-shortcuts .msg-thread-actions__control, ' +
+    '.msg-conversation-card__inbox-shortcuts [class*="msg-thread-actions__control"]'
+  );
+};
+
+// Find an option button by visible text inside an open thread-actions dropdown.
+LF.findThreadActionOption = function (re) {
+  var menus = document.querySelectorAll(
+    '.msg-thread-actions__dropdown-options--inbox-shortcuts, ' +
+    '[class*="msg-thread-actions__dropdown-options"]'
+  );
+  for (var i = 0; i < menus.length; i++) {
+    var options = menus[i].querySelectorAll('[role="button"], [role="link"], .artdeco-dropdown__item');
+    for (var j = 0; j < options.length; j++) {
+      if (re.test((options[j].textContent || '').replace(/\s+/g, ' ').trim())) {
+        return options[j];
+      }
+    }
+  }
+  return null;
 };
 
 // Find the Accept or Ignore button inside a single card.

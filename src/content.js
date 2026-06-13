@@ -14,11 +14,80 @@
   var VERIFIED_URL =
     'https://www.linkedin.com/mynetwork/invitation-manager/received/FROM_VERIFIED_MEMBER/';
   var PENDING_ACTION_KEY = 'LinkFilter.pendingAction';
+  var SETTINGS_KEY = 'LinkFilter.settings';
+  var CACHE_KEY = 'LinkFilter.convCache';
+  var MIN_VISIBLE_ROWS = 12; // keep the inbox at least this full after hiding
 
   var state = { running: false, stop: false, processed: 0 };
   var currentHref = location.href;
   var syncTimer = null;
   var mountRetriesLeft = 40;
+
+  // Persisted UI state (#6). Defaults: target everything except your own
+  // connections; filtering on, hiding sponsored/InMail and 3+ one-sided spam.
+  var DEFAULT_SETTINGS = {
+    target: { sponsored: true, inmail: true, outOfNetwork: true, connection: false },
+    filter: { enabled: true, sponsored: true, inmail: true, oneSided: true }
+  };
+  var settings = cloneSettings(DEFAULT_SETTINGS);
+  // Per-conversation analysis cache keyed by LF.conversationKey (#5).
+  var convCache = {};
+  var settingsLoaded = false;
+
+  // Filtration lifecycle state.
+  var filtrationActive = false;
+  var analysisInProgress = false;
+  var analysisTimer = null;
+  var filterStop = false;
+  var listObserver = null;
+  var scrollTarget = null;
+  var scrollHandler = null;
+
+  function cloneSettings(s) { return JSON.parse(JSON.stringify(s)); }
+
+  function mergeSettings(base, override) {
+    var out = cloneSettings(base);
+    if (override && typeof override === 'object') {
+      ['target', 'filter'].forEach(function (group) {
+        if (override[group] && typeof override[group] === 'object') {
+          Object.keys(out[group]).forEach(function (key) {
+            if (typeof override[group][key] === 'boolean') {
+              out[group][key] = override[group][key];
+            }
+          });
+        }
+      });
+    }
+    return out;
+  }
+
+  function hasStorage() {
+    return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  }
+
+  function loadPersisted(done) {
+    if (!hasStorage()) { settingsLoaded = true; done(); return; }
+    chrome.storage.local.get([SETTINGS_KEY, CACHE_KEY], function (data) {
+      if (data && data[SETTINGS_KEY]) settings = mergeSettings(DEFAULT_SETTINGS, data[SETTINGS_KEY]);
+      if (data && data[CACHE_KEY] && typeof data[CACHE_KEY] === 'object') convCache = data[CACHE_KEY];
+      settingsLoaded = true;
+      done();
+    });
+  }
+
+  function saveSettings() {
+    if (!hasStorage()) return;
+    var payload = {};
+    payload[SETTINGS_KEY] = settings;
+    chrome.storage.local.set(payload);
+  }
+
+  function saveCache() {
+    if (!hasStorage()) return;
+    var payload = {};
+    payload[CACHE_KEY] = convCache;
+    chrome.storage.local.set(payload);
+  }
 
   function injectStyles() {
     if (document.getElementById('lf-panel-style')) return;
@@ -139,7 +208,43 @@
       '  background: #38434f;',
       '  color: #e9e5df;',
       '  border-color: #56687a;',
-      '}'
+      '}',
+      '#lf-panel .lf-section {',
+      '  border-top: 1px solid #e3e7eb;',
+      '  margin-top: 8px;',
+      '  padding-top: 8px;',
+      '}',
+      '#lf-panel .lf-section-title {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 6px;',
+      '  font-weight: 700;',
+      '  font-size: 12px;',
+      '  text-transform: uppercase;',
+      '  letter-spacing: 0.04em;',
+      '  color: #56687a;',
+      '  margin-bottom: 6px;',
+      '}',
+      '#lf-panel .lf-checks {',
+      '  display: flex;',
+      '  flex-wrap: wrap;',
+      '  gap: 4px 14px;',
+      '  margin-bottom: 8px;',
+      '}',
+      '#lf-panel .lf-check {',
+      '  display: flex;',
+      '  align-items: center;',
+      '  gap: 5px;',
+      '  font-size: 12px;',
+      '  cursor: pointer;',
+      '  white-space: nowrap;',
+      '}',
+      '#lf-panel .lf-check input { margin: 0; cursor: pointer; }',
+      '#lf-panel .lf-check.lf-check--disabled { opacity: 0.45; cursor: default; }',
+      '#lf-panel .lf-toggle { margin-left: auto; text-transform: none; letter-spacing: 0; }',
+      'body[data-color-scheme="dark"] #lf-panel .lf-section { border-top-color: #38434f; }',
+      'body[data-color-scheme="dark"] #lf-panel .lf-section-title { color: #a9b0b7; }',
+      '.lf-row-hidden { display: none !important; }'
     ].join('\n');
 
     (document.head || document.documentElement).appendChild(style);
@@ -161,11 +266,34 @@
     '  </label>',
     '  <span class="lf-hint">0 = all</span>',
     '</div>',
+    '<div class="lf-row lf-actions lf-invitation-action">',
+    '  <button id="lf-accept" class="lf-btn lf-accept">Accept all</button>',
+    '  <button id="lf-ignore" class="lf-btn lf-ignore">Ignore all</button>',
+    '  <button id="lf-verified" class="lf-btn">Accept verified only</button>',
+    '</div>',
+    '<div class="lf-section lf-message-action">',
+    '  <div class="lf-section-title">Mark read — target</div>',
+    '  <div class="lf-checks">',
+    '    <label class="lf-check"><input type="checkbox" id="lf-tgt-sponsored">Sponsored</label>',
+    '    <label class="lf-check"><input type="checkbox" id="lf-tgt-inmail">InMail</label>',
+    '    <label class="lf-check"><input type="checkbox" id="lf-tgt-outnet">Out of network</label>',
+    '    <label class="lf-check"><input type="checkbox" id="lf-tgt-conn">From connections</label>',
+    '  </div>',
+    '  <div class="lf-row lf-actions">',
+    '    <button id="lf-mark-read" class="lf-btn lf-accept">Mark messages read</button>',
+    '  </div>',
+    '</div>',
+    '<div class="lf-section lf-message-action">',
+    '  <div class="lf-section-title">Filter',
+    '    <label class="lf-check lf-toggle"><input type="checkbox" id="lf-flt-enabled">On</label>',
+    '  </div>',
+    '  <div class="lf-checks">',
+    '    <label class="lf-check"><input type="checkbox" id="lf-flt-sponsored">Hide sponsored</label>',
+    '    <label class="lf-check"><input type="checkbox" id="lf-flt-inmail">Hide InMail</label>',
+    '    <label class="lf-check"><input type="checkbox" id="lf-flt-onesided">Hide 3+ one-sided</label>',
+    '  </div>',
+    '</div>',
     '<div class="lf-row lf-actions">',
-    '  <button id="lf-accept" class="lf-btn lf-accept lf-invitation-action">Accept all</button>',
-    '  <button id="lf-ignore" class="lf-btn lf-ignore lf-invitation-action">Ignore all</button>',
-    '  <button id="lf-verified" class="lf-btn lf-invitation-action">Accept verified only</button>',
-    '  <button id="lf-mark-read" class="lf-btn lf-accept lf-message-action lf-hidden">Mark messages read</button>',
     '  <button id="lf-stop" class="lf-btn lf-stop" disabled>Stop</button>',
     '</div>'
   ].join('');
@@ -223,6 +351,7 @@
   }
 
   function unmountPanel() {
+    stopFiltration();
     if (panel.parentNode) panel.parentNode.removeChild(panel);
     panel.classList.remove('lf-panel--floating');
     if (state.running) state.stop = true;
@@ -241,9 +370,20 @@
 
     syncPanelMode();
     if (isMessagingPage()) {
+      var topBar = LF.getMessagingTopAnchor && LF.getMessagingTopAnchor();
+      if (topBar && topBar.parentNode) {
+        panel.classList.remove('lf-panel--floating');
+        if (topBar.nextSibling !== panel) {
+          topBar.parentNode.insertBefore(panel, topBar.nextSibling);
+        }
+        mountRetriesLeft = 0;
+        startFiltration();
+        return;
+      }
+      // Top bar not rendered yet — float for now and keep re-checking so we
+      // can re-anchor below LinkedIn's filters once it appears.
       panel.classList.add('lf-panel--floating');
       if (panel.parentNode !== document.body) document.body.appendChild(panel);
-      mountRetriesLeft = 0;
       return;
     }
 
@@ -510,7 +650,8 @@
       var threads = LF.getMessageThreads(container);
       var unread = threads.filter(function (thread) {
         var key = LF.messageThreadKey(thread);
-        return key && !seen[key] && LF.isUnreadMessageThread(thread);
+        if (!key || seen[key] || !LF.isUnreadMessageThread(thread)) return false;
+        return isCategoryTargeted(LF.getThreadCategory(thread));
       });
 
       if (unread.length === 0) {
@@ -555,7 +696,299 @@
     );
   }
 
+  // ------------------------------------------------------ settings + UI ----
+  var SETTING_CONTROLS = [
+    ['#lf-tgt-sponsored', 'target', 'sponsored'],
+    ['#lf-tgt-inmail', 'target', 'inmail'],
+    ['#lf-tgt-outnet', 'target', 'outOfNetwork'],
+    ['#lf-tgt-conn', 'target', 'connection'],
+    ['#lf-flt-enabled', 'filter', 'enabled'],
+    ['#lf-flt-sponsored', 'filter', 'sponsored'],
+    ['#lf-flt-inmail', 'filter', 'inmail'],
+    ['#lf-flt-onesided', 'filter', 'oneSided']
+  ];
+
+  function applySettingsToUI() {
+    SETTING_CONTROLS.forEach(function (c) {
+      var el = $(c[0]);
+      if (el) el.checked = !!settings[c[1]][c[2]];
+    });
+    reflectFilterEnabled();
+  }
+
+  // Grey out the per-category filter checkboxes while the master toggle is off.
+  function reflectFilterEnabled() {
+    var on = settings.filter.enabled;
+    ['#lf-flt-sponsored', '#lf-flt-inmail', '#lf-flt-onesided'].forEach(function (sel) {
+      var el = $(sel);
+      if (!el) return;
+      el.disabled = !on;
+      var label = el.closest('.lf-check');
+      if (label) label.classList.toggle('lf-check--disabled', !on);
+    });
+  }
+
+  function bindSettingControls() {
+    SETTING_CONTROLS.forEach(function (c) {
+      var el = $(c[0]);
+      if (!el || el.__lfBound) return;
+      el.__lfBound = true;
+      el.addEventListener('change', function () {
+        settings[c[1]][c[2]] = el.checked;
+        saveSettings();
+        onSettingsChanged();
+      });
+    });
+  }
+
+  function onSettingsChanged() {
+    reflectFilterEnabled();
+    if (!isMessagingPage()) return;
+    applyFilters();
+    if (settings.filter.enabled) {
+      scheduleAnalysis();
+      fillViewport();
+    }
+  }
+
+  function isCategoryTargeted(category) {
+    if (category === 'sponsored') return !!settings.target.sponsored;
+    if (category === 'inmail') return !!settings.target.inmail;
+    if (category === 'connection') return !!settings.target.connection;
+    return !!settings.target.outOfNetwork; // out-of-network
+  }
+
+  // ------------------------------------------------------------ filtration ----
+  function debounce(fn, ms) {
+    var t = null;
+    return function () {
+      if (t) clearTimeout(t);
+      t = setTimeout(function () { t = null; fn(); }, ms);
+    };
+  }
+
+  function cacheRecord(thread) {
+    var key = LF.conversationKey(thread);
+    return key ? convCache[key] : null;
+  }
+
+  // A cached verdict is only trusted while the row's snippet + timestamp match;
+  // a new message changes those, so we re-analyze (handles old threads that
+  // gain replies).
+  function isRecordFresh(rec, thread) {
+    return !!rec &&
+      rec.snippet === LF.messageSnippet(thread) &&
+      rec.timestamp === LF.messageTimestamp(thread);
+  }
+
+  function getFreshCacheRecord(thread) {
+    var rec = cacheRecord(thread);
+    return isRecordFresh(rec, thread) ? rec : null;
+  }
+
+  function shouldHideThread(thread) {
+    if (!settings.filter.enabled) return false;
+    var category = LF.getThreadCategory(thread);
+    if (category === 'sponsored' && settings.filter.sponsored) return true;
+    if (category === 'inmail' && settings.filter.inmail) return true;
+    if (settings.filter.oneSided) {
+      var rec = getFreshCacheRecord(thread);
+      if (rec && rec.isSpam) return true;
+    }
+    return false;
+  }
+
+  // Hide/un-hide every loaded row. Cheap and synchronous: category checks read
+  // the list row only; the one-sided verdict comes from the cache.
+  function applyFilters() {
+    var container = LF.getMessageContainer();
+    if (!container) return { hidden: 0, visible: 0, total: 0 };
+
+    var rows = LF.getMessageThreadRows(container);
+    var hidden = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var hide = shouldHideThread(rows[i]);
+      rows[i].classList.toggle('lf-row-hidden', hide);
+      if (hide) hidden++;
+    }
+    return { hidden: hidden, visible: rows.length - hidden, total: rows.length };
+  }
+
+  function isOneSidedCandidate(thread) {
+    if (thread.classList.contains('lf-row-hidden')) return false; // already hidden
+    if (LF.userRepliedLast(thread)) return false;                 // user replied last
+    if (LF.getThreadCategory(thread) === 'connection') return false; // skip your network
+    if (getFreshCacheRecord(thread)) return false;                // already analyzed
+    return true;
+  }
+
+  // Wait for the opened conversation's messages to render and settle.
+  async function waitForThreadPane() {
+    var last = -1;
+    for (var i = 0; i < 24; i++) {
+      await delay(150);
+      var c = LF.getOpenThreadEvents().length;
+      if (c > 0 && c === last) return c;
+      last = c;
+    }
+    return last;
+  }
+
+  // Restore a false positive (a non-spam thread we opened) to unread via the
+  // row's overflow menu → "Mark as unread".
+  async function markThreadUnread(thread) {
+    var btn = LF.getRowOverflowButton(thread);
+    if (!btn) return;
+    btn.click();
+    await delay(250);
+    var option = LF.findThreadActionOption(/^mark as unread$/i);
+    if (option) {
+      option.click();
+      await delay(200);
+    } else {
+      btn.click(); // couldn't find it — close the menu we opened
+    }
+  }
+
+  async function analyzeThread(thread) {
+    var key = LF.conversationKey(thread);
+    if (!key) return;
+
+    var wasUnread = LF.isUnreadMessageThread(thread);
+    if (!activateMessageThread(thread)) return;
+    await waitForThreadPane();
+
+    var sides = LF.countThreadSides();
+    var isSpam = sides.otherCount >= 3 && !sides.userReplied;
+    convCache[key] = {
+      profileUrn: LF.getOpenThreadProfileUrn(),
+      snippet: LF.messageSnippet(thread),
+      timestamp: LF.messageTimestamp(thread),
+      otherCount: sides.otherCount,
+      userReplied: sides.userReplied,
+      isSpam: isSpam,
+      analyzedAt: Date.now()
+    };
+    saveCache();
+
+    // Opening marked the thread read; undo that for non-spam threads.
+    if (!isSpam && wasUnread) await markThreadUnread(thread);
+  }
+
+  // Background pass: open uncached candidates, cache the verdict, hide spam.
+  // Throttled and stoppable; cached results make later passes effectively free.
+  async function analyzeOneSided() {
+    if (analysisInProgress || state.running) return;
+    if (!settings.filter.enabled || !settings.filter.oneSided) return;
+
+    var container = LF.getMessageContainer();
+    if (!container) return;
+
+    analysisInProgress = true;
+    filterStop = false;
+    var analyzed = 0;
+    try {
+      var rows = LF.getMessageThreadRows(container);
+      for (var i = 0; i < rows.length; i++) {
+        if (filterStop || state.stop || state.running) break;
+        var thread = rows[i];
+        if (!document.contains(thread) || !isOneSidedCandidate(thread)) continue;
+
+        setStatus('Scanning for one-sided senders…');
+        await analyzeThread(thread);
+        applyFilters();
+        analyzed++;
+        await randomMessageDelay();
+      }
+    } finally {
+      analysisInProgress = false;
+    }
+
+    if (analyzed > 0) setStatus('Filtered. Scanned ' + analyzed + ' conversation(s).');
+  }
+
+  function scheduleAnalysis() {
+    if (!settings.filter.enabled || !settings.filter.oneSided) return;
+    if (analysisTimer || analysisInProgress) return;
+    analysisTimer = setTimeout(function () {
+      analysisTimer = null;
+      analyzeOneSided();
+    }, 600);
+  }
+
+  // After hiding, the visible list can look sparse. Pull in more rows (which
+  // LinkedIn lazy-loads on scroll) and re-filter until the viewport is full or
+  // nothing new loads — repeated a bounded number of times (#5).
+  async function fillViewport() {
+    if (!settings.filter.enabled) return;
+    var container = LF.getMessageContainer();
+    if (!container) return;
+
+    for (var pass = 0; pass < 8; pass++) {
+      if (filterStop || state.stop) break;
+      var res = applyFilters();
+      if (res.visible >= MIN_VISIBLE_ROWS) break;
+
+      var before = res.total;
+      scrollMessagesToLoadMore(container);
+      await delay(1000);
+      if (LF.getMessageThreadRows(container).length === before) break; // no new rows
+    }
+    applyFilters();
+  }
+
+  function attachObservers() {
+    var container = LF.getMessageContainer();
+    if (!container) return;
+
+    var refilter = debounce(function () {
+      // Only childList changes (new rows) reach us — our class toggles are
+      // attribute mutations, so this can't loop on its own hiding.
+      applyFilters();
+      scheduleAnalysis();
+    }, 250);
+
+    if (listObserver) listObserver.disconnect();
+    listObserver = new MutationObserver(refilter);
+    listObserver.observe(container, { childList: true, subtree: true });
+
+    detachScroll();
+    scrollTarget = getScrollableParent(container);
+    scrollHandler = refilter;
+    (scrollTarget || window).addEventListener('scroll', scrollHandler, true);
+  }
+
+  function detachScroll() {
+    if (scrollHandler) {
+      (scrollTarget || window).removeEventListener('scroll', scrollHandler, true);
+    }
+    scrollHandler = null;
+    scrollTarget = null;
+  }
+
+  function startFiltration() {
+    if (!settingsLoaded) return; // load callback re-triggers a sync
+    if (filtrationActive) { applyFilters(); return; }
+    filtrationActive = true;
+    filterStop = false;
+    attachObservers();
+    applyFilters();
+    fillViewport();
+    scheduleAnalysis();
+  }
+
+  function stopFiltration() {
+    if (!filtrationActive && !listObserver) return;
+    filtrationActive = false;
+    filterStop = true;
+    if (analysisTimer) { clearTimeout(analysisTimer); analysisTimer = null; }
+    if (listObserver) { listObserver.disconnect(); listObserver = null; }
+    detachScroll();
+  }
+
   // --------------------------------------------------------------- wiring ----
+  bindSettingControls();
+
   $('#lf-accept').addEventListener('click', function () {
     if (!state.running) processAll('accept');
   });
@@ -578,6 +1011,7 @@
   });
   $('#lf-stop').addEventListener('click', function () {
     state.stop = true;
+    filterStop = true;
     setStatus('Stopping…');
   });
 
@@ -604,8 +1038,16 @@
       mountRetriesLeft--;
       syncPanel();
     }
+    // While floating on messaging, keep trying to re-anchor below the top bar.
+    if (isMessagingPage() && panel.classList.contains('lf-panel--floating')) {
+      syncPanel();
+    }
     if (panel.isConnected) consumePendingAction();
   }, 500);
 
-  retryMount();
+  // Hydrate persisted settings (#6), reflect them into the panel, then mount.
+  loadPersisted(function () {
+    applySettingsToUI();
+    retryMount();
+  });
 })();
