@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LinkedBlock - inbox spam and ad blocker",
+  "name": "LinkedBlock - block spam, clear connections",
   "version": "0.5.0",
-  "description": "Hide sponsored messages, InMail and spam in your LinkedIn inbox. Runs entirely in your browser - nothing is ever sent anywhere.",
+  "description": "Block sponsored messages, InMail and inbox spam on LinkedIn, plus bulk accept/ignore connection requests. All local, nothing sent.",
   "permissions": ["storage"],
   "content_scripts": [
     {

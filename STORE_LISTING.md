@@ -2,17 +2,17 @@
 
 Copy for the CWS listing. Paste the fields into the developer dashboard.
 
-## Name (manifest `name`, max 45 chars)
+## Name (manifest `name`, max 75 chars)
 
-LinkedBlock - inbox spam and ad blocker
+LinkedBlock - block spam, clear connections
 
 ## Summary (max 132 chars)
 
-Hide sponsored messages, InMail and spam in your LinkedIn inbox. Runs entirely in your browser - nothing is ever sent anywhere.
+Block sponsored messages, InMail and inbox spam on LinkedIn, plus bulk accept/ignore connection requests. All local, nothing sent.
 
 ## Category
 
-Productivity
+Social & Communication (recommended). See the note at the end for alternatives.
 
 ## Detailed description
 
@@ -53,3 +53,13 @@ One more thing: automating actions on LinkedIn is not something LinkedIn loves, 
   - `storage` - saves your settings and a small local analysis cache on your machine.
   - Host access to `www.linkedin.com` - the extension only runs on LinkedIn, to read the inbox/invitation pages it filters.
   - Remote code: none. All code ships in the package.
+
+## Category - notes
+
+You picked **Tools**, which is a safe, generic fit. A couple of options that match more closely:
+
+- **Social & Communication** (my pick) - the extension acts on LinkedIn messages and connections, which is squarely what this category is for. Most on-target for what users are actually doing.
+- **Privacy & Security** - where most ad/spam blockers live, and it plays to the "local, nothing sent" angle. Reasonable if you want to lean on the blocker/privacy identity.
+- **Tools** / **Workflow & Planning** - both fine as generic fallbacks; less specific than the two above.
+
+Any of these will pass review. I would go Social & Communication first, Privacy & Security second.

@@ -1,8 +1,10 @@
 # LinkedBlock
 
-An ad and spam blocker for your LinkedIn inbox.
+An ad and spam blocker for your LinkedIn inbox and connections.
 
 LinkedIn messaging has quietly turned into another ad channel - sponsored messages, cold InMail, and sales bots that ping you three times and never get a reply. LinkedBlock hides all of that, so your inbox is just the people you actually want to hear from. It also clears out the pile of pending connection requests in one click.
+
+Same with connections. Sometimes you just want to accept them all (or reject) at once. LinkedBlock does that too.
 
 It works like an ad blocker. Everything happens in your browser, on the page you are already looking at. Nothing about your account or your messages is sent anywhere - there is no server and no sign-in (more on that under [Your privacy](#your-privacy)).
 

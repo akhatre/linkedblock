@@ -1,2 +1,5 @@
 /.claude/
 /.idea/
+
+# Build artifact (make pack) - distribute via GitHub Releases, not the tree
+/linkedblock.zip
