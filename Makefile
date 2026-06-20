@@ -1,4 +1,4 @@
-NAME    := linkfilter
+NAME    := linkedblock
 ZIP     := $(NAME).zip
 SOURCES := manifest.json src
 

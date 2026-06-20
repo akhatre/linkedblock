@@ -1,14 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "LinkFilter — LinkedIn bulk cleanup",
-  "version": "0.3.0",
+  "name": "LinkedBlock — LinkedIn bulk cleanup",
+  "version": "0.4.0",
   "description": "Bulk accept/ignore LinkedIn connection requests and mark messages as read with human-like throttling and a test limit.",
   "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": ["https://www.linkedin.com/*"],
-      "js": ["src/selectors.js", "src/content.js"],
-      "run_at": "document_idle"
+      "js": [
+        "src/selectors.js",
+        "src/util.js",
+        "src/store.js",
+        "src/panel.js",
+        "src/invitations.js",
+        "src/messaging.js",
+        "src/app.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ]
 }

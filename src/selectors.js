@@ -1,10 +1,10 @@
-// selectors.js — every DOM anchor LinkFilter relies on, in one place.
+// selectors.js — every DOM anchor LinkedBlock relies on, in one place.
 //
 // LinkedIn's CSS classes are hashed and change on every deploy, so we only
 // anchor on stable, semantic attributes (data-testid, role, componentkey,
 // aria-label) and module headings as a fallback. If LinkedIn changes their
 // markup, this is the only file you should need to touch.
-var LF = window.__LinkFilter || (window.__LinkFilter = {});
+var LF = window.__LinkedBlock || (window.__LinkedBlock = {});
 
 LF.SELECTORS = {
   // The lazy/virtualized list that holds the invitation cards.
@@ -122,7 +122,7 @@ LF.getMessageThreads = function (root) {
   return threads;
 };
 
-// Every conversation row in the DOM, including ones LinkFilter has hidden
+// Every conversation row in the DOM, including ones LinkedBlock has hidden
 // (display:none). `getMessageThreads` skips invisible rows, so filtration uses
 // this variant — otherwise a hidden row could never be un-hidden again.
 LF.getMessageThreadRows = function (root) {
@@ -164,7 +164,7 @@ LF.getMessageContainer = function () {
   return best || threads[0].closest('[role="list"], ul, ol') || threads[0].parentElement;
 };
 
-// The top bar that holds LinkedIn's own search/filter controls. LinkFilter's
+// The top bar that holds LinkedIn's own search/filter controls. LinkedBlock's
 // messaging panel mounts immediately below it, at the top of the inbox column.
 LF.getMessagingTopAnchor = function () {
   return document.querySelector(
@@ -316,7 +316,16 @@ LF.conversationKey = function (thread) {
   var name = participant ? (participant.textContent || '').replace(/\s+/g, ' ').trim() : '';
   if (name) return 'names:' + name.toLowerCase();
 
-  return LF.messageThreadKey(thread);
+  // The avatar's alt text is the participant's name and is set in the row markup
+  // even before the text nodes paint.
+  var avatar = thread.querySelector('img[alt]');
+  var alt = avatar ? (avatar.getAttribute('alt') || '').replace(/\s+/g, ' ').trim() : '';
+  if (alt) return 'names:' + alt.toLowerCase();
+
+  // No stable identifier yet — the row is still hydrating. Return empty so
+  // callers wait, rather than keying the cache by a volatile Ember id (which
+  // changes every load and would defeat the cache entirely).
+  return '';
 };
 
 // Latest-message snippet text (used for cache invalidation and the "You:"
