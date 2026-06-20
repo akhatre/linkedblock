@@ -4,6 +4,15 @@
   "version": "0.5.0",
   "description": "Block sponsored messages, InMail and inbox spam on LinkedIn, plus bulk accept/ignore connection requests. All local, nothing sent.",
   "permissions": ["storage"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "linkedblock@uncertain.dev",
+      "strict_min_version": "115.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
   "content_scripts": [
     {
       "matches": ["https://www.linkedin.com/*"],

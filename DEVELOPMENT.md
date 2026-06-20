@@ -12,6 +12,23 @@ LinkedBlock is a vanilla-JS Manifest V3 content script. No build step, no depend
 
 `make build` just prints these instructions. `make pack` produces `linkedblock.zip` for distribution or drag-and-drop install.
 
+## Cross-browser (Firefox)
+
+There is no separate Firefox build. The same `manifest.json` and the same `linkedblock.zip` from `make pack` work on both Chrome (Web Store) and Firefox (AMO). The code only uses `chrome.storage` and `chrome.runtime.id`, which Firefox supports under the `chrome.*` alias, so no source changes are needed.
+
+The manifest carries a `browser_specific_settings.gecko` block (the AMO add-on id, a minimum Firefox version, and a `data_collection_permissions: ["none"]` declaration). Chrome ignores that key, which is why one shared manifest is enough.
+
+Two things to keep in sync when you change the manifest:
+
+- **Bump `version` for every store update - both stores.** The `browser_specific_settings` key lives in the shared manifest, so a Chrome-only change still ships that block; just remember Chrome and Firefox both read `version` and each needs an increment per upload.
+- **The gecko `id` is permanent on AMO** once the first version is uploaded. Don't change it afterwards.
+
+Validate before submitting either store with Mozilla's linter (it checks the manifest and flags AMO issues):
+
+```
+npx web-ext lint --source-dir=.
+```
+
 ## Architecture
 
 The content script is split into focused modules, loaded in this order (see `manifest.json`). Each is an IIFE that attaches to a shared `window.__LinkedBlock` namespace (aliased `LF`).
