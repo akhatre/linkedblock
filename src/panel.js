@@ -249,7 +249,7 @@
       '<div id="lf-pop" class="lf-pop lf-hidden">',
       '  <div class="lf-section">',
       '    <label class="lf-limit">Limit <span class="lf-hint">(0 = all)</span>',
-      '      <input id="lf-limit" type="number" min="0" value="100"></label>',
+      '      <input id="lf-limit" type="number" min="0" value="30"></label>',
       '  </div>',
       '  <div class="lf-section lf-message-action">',
       '    <div class="lf-section-title">Mark read — target</div>',

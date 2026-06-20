@@ -2,7 +2,7 @@
 // ownership, and wiring the panel's buttons to the invitation / messaging
 // modules. This is the only file that knows about the page lifecycle.
 (function () {
-  var VERSION = '0.4.0';
+  var VERSION = '0.5.0';
   function log() {
     try { console.info.apply(console, ['[LinkedBlock]'].concat([].slice.call(arguments))); } catch (e) {}
   }

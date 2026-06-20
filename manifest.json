@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LinkedBlock — LinkedIn bulk cleanup",
-  "version": "0.4.0",
-  "description": "Bulk accept/ignore LinkedIn connection requests and mark messages as read with human-like throttling and a test limit.",
+  "name": "LinkedBlock - inbox spam and ad blocker",
+  "version": "0.5.0",
+  "description": "Hide sponsored messages, InMail and spam in your LinkedIn inbox. Runs entirely in your browser - nothing is ever sent anywhere.",
   "permissions": ["storage"],
   "content_scripts": [
     {

@@ -8,11 +8,14 @@
   var CACHE_KEY = 'LinkedBlock.convCache';
 
   // Defaults: mark-read targets sponsored / InMail / out-of-network senders
-  // (never your own connections); filtering on, hiding sponsored, InMail and
-  // 3+ one-sided (spammy) conversations.
+  // (never your own connections); filtering on, hiding sponsored and InMail.
+  // `oneSided` is OFF by default and opt-in: unlike the sponsored/InMail filters
+  // (pure, local row-hiding), detecting one-sided spam opens each suspect
+  // conversation to read its history — which marks it read on the server — so it
+  // is not a purely-local action and shouldn't run on a fresh install unasked.
   var DEFAULTS = {
     target: { sponsored: true, inmail: true, outOfNetwork: true, connection: false },
-    filter: { enabled: true, sponsored: true, inmail: true, oneSided: true }
+    filter: { enabled: true, sponsored: true, inmail: true, oneSided: false }
   };
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
